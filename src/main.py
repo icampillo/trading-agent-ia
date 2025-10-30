@@ -12,6 +12,17 @@ from src.indicators.taapi_client import TAAPIClient
 
 from src.utils.prompt_utils import round_or_none, round_series
 
+def get_interval_seconds(interval_str):
+    """Convert interval strings like '5m' or '1h' to seconds."""
+    if interval_str.endswith('m'):
+        return int(interval_str[:-1]) * 60
+    elif interval_str.endswith('h'):
+        return int(interval_str[:-1]) * 3600
+    elif interval_str.endswith('d'):
+        return int(interval_str[:-1]) * 86400
+    else:
+        raise ValueError(f"Unsupported interval: {interval_str}")
+
 def main():
     """Entry point for fetching and logging TAAPI indicators for given assets."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -104,7 +115,8 @@ def main():
                     add_event(f"Data gather error {asset}: {e}")
                     continue
                 
-    
+            await asyncio.sleep(get_interval_seconds(args.interval))
+                
     async def main_async():
         """Start the aiohttp server and kick off the trading loop."""
         await run_loop()
