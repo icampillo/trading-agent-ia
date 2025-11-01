@@ -1,6 +1,14 @@
 from datetime import datetime
 from typing import Iterable, Any
 
+def json_default(obj: Any) -> Any:
+    """Serialize datetime and set objects for JSON dumps."""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, set):
+        return list(obj)
+    return str(obj)
+
 def safe_float(value: Any) -> float | None:
     """Cast ``value`` to float when possible, otherwise return ``None``."""
     try:

@@ -393,3 +393,8 @@ class HyperliquidAPI:
         except (RuntimeError, ValueError, KeyError, ConnectionError, TypeError) as e:
             logging.error("Funding fetch error for %s: %s", asset, e)
             return None
+        
+        
+        
+        
+# python src/main.py --assets BTC ETH --interval 1h      

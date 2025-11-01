@@ -23,4 +23,8 @@ CONFIG = {
     # Runtime controls via env
     "assets": _get_env("ASSETS"),  # e.g., "BTC ETH SOL" or "BTC,ETH,SOL"
     "interval": _get_env("INTERVAL"),  # e.g., "5m", "1h"
+    # LLM Model configuration
+    "openrouter_api_key": _get_env("OPENROUTER_API_KEY", required=True),
+    "openrouter_base_url": _get_env("OPENROUTER_BASE_URL", required=True),
+    "llm_model": _get_env("LLM_MODEL")
 }
