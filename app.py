@@ -22,7 +22,7 @@ from src.main import run_trading_bot
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', allow_unsafe_werkzeug=True)
 
 # Global state
 portfolio_history = []  # Liste des valeurs historiques du portefeuille
