@@ -1,5 +1,7 @@
 """Flask app for real-time portfolio monitoring with AI reasoning."""
 import sys
+import logging
+
 import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
@@ -30,6 +32,19 @@ ai_reasoning_log = []   # Log des raisonnements de l'IA
 trades_history = []     # Historique des trades
 
 diary = TradeDiary()
+
+# Configure logging AVANT tout
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout,
+    force=True
+)
+
+# Force flush immédiat
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 
 async def fetch_portfolio_data():
     """Fetch latest portfolio data from Hyperliquid."""
@@ -205,29 +220,55 @@ def handle_disconnect():
 def start_trading_bot():
     """Lance le bot de trading en arrière-plan."""
     try:
-        # Récupère les assets depuis l'env ou utilise des valeurs par défaut
+        print("="*80, flush=True)
+        print("🤖 DÉMARRAGE DU BOT DE TRADING", flush=True)
+        print("="*80, flush=True)
+        
+        # Récupère les assets depuis l'env
         assets_str = os.getenv('TRADING_ASSETS', 'BTC,ETH')
-        assets = assets_str.split(',')  # Convertit "BTC,ETH" en ['BTC', 'ETH']
+        assets = assets_str.split(',')
         interval = os.getenv('TRADING_INTERVAL', '5m')
         
-        print(f"🤖 Démarrage du bot pour {assets} avec intervalle {interval}")
+        print(f"📊 Assets: {assets}", flush=True)
+        print(f"⏱️  Interval: {interval}", flush=True)
+        print(f"🔑 API Keys présentes:", flush=True)
+        print(f"  - OPENROUTER_API_KEY: {'✅' if os.getenv('OPENROUTER_API_KEY') else '❌'}", flush=True)
+        print(f"  - TAAPI_API_KEY: {'✅' if os.getenv('TAAPI_API_KEY') else '❌'}", flush=True)
+        print(f"  - HYPERLIQUID_PRIVATE_KEY: {'✅' if os.getenv('HYPERLIQUID_PRIVATE_KEY') else '❌'}", flush=True)
+        print("="*80, flush=True)
         
-        # Lance le bot avec les bons arguments
+        # Lance le bot
+        print("🚀 Lancement de run_trading_bot()...", flush=True)
         asyncio.run(run_trading_bot(assets, interval))
+        
     except Exception as e:
-        print(f"❌ Erreur bot: {e}")
+        print("="*80, flush=True)
+        print(f"💥 ERREUR FATALE DANS LE BOT", flush=True)
+        print("="*80, flush=True)
+        print(f"❌ {type(e).__name__}: {e}", flush=True)
         import traceback
         traceback.print_exc()
+        print("="*80, flush=True)
 
 if __name__ == '__main__':
+    print("\n" + "="*80, flush=True)
+    print("🏁 INITIALISATION DE L'APPLICATION", flush=True)
+    print("="*80 + "\n", flush=True)
+    
     # Lance le bot dans un thread séparé
+    print("📌 Création du thread pour le bot...", flush=True)
     bot_thread = threading.Thread(target=start_trading_bot, daemon=True)
     bot_thread.start()
-    print("🤖 Trading bot démarré en arrière-plan")
+    print("✅ Thread bot créé et démarré", flush=True)
     
-    # Donne un peu de temps au bot pour démarrer
+    # Donne du temps au bot
     import time
-    time.sleep(2)
+    print("⏳ Attente 5s pour le démarrage du bot...", flush=True)
+    time.sleep(5)
+    
+    print("\n" + "="*80, flush=True)
+    print("🌐 DÉMARRAGE DE L'API FLASK", flush=True)
+    print("="*80 + "\n", flush=True)
     
     # Lance l'API Flask
     socketio.start_background_task(update_portfolio)
