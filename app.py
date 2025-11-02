@@ -232,4 +232,4 @@ if __name__ == '__main__':
     # Lance l'API Flask
     socketio.start_background_task(update_portfolio)
     port = int(os.getenv('PORT', 3000))
-    socketio.run(app, debug=os.getenv('DEBUG', 'False') == 'True', host='0.0.0.0', port=port)
+    socketio.run(app, debug=os.getenv('DEBUG', 'False') == 'True', host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
