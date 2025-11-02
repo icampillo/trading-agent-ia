@@ -66,9 +66,18 @@ class HyperliquidAPI:
         self._build_clients()
 
     def _build_clients(self):
+        # """Instantiate exchange and info client instances for the active base URL."""
+        # self.info = Info(self.base_url)
+        # self.exchange = Exchange(self.wallet, self.base_url)
         """Instantiate exchange and info client instances for the active base URL."""
         self.info = Info(self.base_url)
-        self.exchange = Exchange(self.wallet, self.base_url)
+        
+        # Si vault_address est fourni, l'agent trade pour ce compte
+        vault_address = CONFIG.get("hyperliquid_vault_address")
+        if vault_address:
+            self.exchange = Exchange(self.wallet, self.base_url, vault_address=vault_address)
+        else:
+            self.exchange = Exchange(self.wallet, self.base_url)
 
     def _reset_clients(self):
         """Recreate SDK clients after connection failures while logging failures."""
@@ -305,7 +314,10 @@ class HyperliquidAPI:
         Returns:
             Dictionary with ``balance``, ``total_value``, and ``positions``.
         """
-        state = await self._retry(lambda: self.info.user_state(self.wallet.address))
+        user_address = CONFIG.get("hyperliquid_vault_address") or self.wallet.address
+        state = await self._retry(lambda: self.info.user_state(user_address))
+        
+        # state = await self._retry(lambda: self.info.user_state(self.wallet.address))
         positions = state.get("assetPositions", [])
         total_value = float(state.get("accountValue", 0.0))
         enriched_positions = []

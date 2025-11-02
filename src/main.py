@@ -66,6 +66,7 @@ def main():
             
             # Global account state
             state = await hyperliquid.get_user_state()
+            add_event(f"Account state: {state}")
             total_value = state.get('total_value') or state['balance'] + sum(p.get('pnl', 0) for p in state['positions'])
             sharpe = calculate_sharpe(trade_log)
             
@@ -285,18 +286,60 @@ def main():
             with open("prompts.log", "a") as f:
                 f.write(f"\n\n--- {datetime.now()} - ALL ASSETS ---\n{json.dumps(context_payload, indent=2, default=json_default)}\n")
                 
-            try:
-                outputs = agent.decide_trade(args.assets, context)
-                if not isinstance(outputs, dict):
-                    add_event(f"Invalid output format (expected dict): {outputs}")
-                    outputs = {}
-            except Exception as e:
-                import traceback
-                add_event(f"Agent error: {e}")
-                add_event(f"Traceback: {traceback.format_exc()}")
-                outputs = {}    
+            def _is_failed_outputs(outs):
+                """Return True when outputs are missing or clearly invalid."""
+                if not isinstance(outs, dict):
+                    return True
+                decisions = outs.get("trade_decisions")
+                if not isinstance(decisions, list) or not decisions:
+                    return True
+                try:
+                    return all(
+                        isinstance(o, dict)
+                        and (o.get('action') == 'hold')
+                        and ('parse error' in (o.get('rationale', '').lower()))
+                        for o in decisions
+                    )
+                except Exception:
+                    return True
                 
-            add_event(f"Agent outputs: {outputs}")
+                
+            # try:
+            #     outputs = agent.decide_trade(args.assets, context)
+            #     if not isinstance(outputs, dict):
+            #         add_event(f"Invalid output format (expected dict): {outputs}")
+            #         outputs = {}
+            # except Exception as e:
+            #     import traceback
+            #     add_event(f"Agent error: {e}")
+            #     add_event(f"Traceback: {traceback.format_exc()}")
+            #     outputs = {}
+                
+                
+            # # Retry once on failure/parse error with a stricter instruction prefix
+            # if _is_failed_outputs(outputs):
+            #     add_event("Retrying LLM once due to invalid/parse-error output")
+            #     context_retry_payload = OrderedDict([
+            #         ("retry_instruction", "Return ONLY the JSON array per schema with no prose."),
+            #         ("original_context", context_payload)
+            #     ])
+            #     context_retry = json.dumps(context_retry_payload, default=json_default)
+            #     try:
+            #         outputs = agent.decide_trade(args.assets, context_retry)
+            #         if not isinstance(outputs, dict):
+            #             add_event(f"Retry invalid format: {outputs}")
+            #             outputs = {}
+            #     except Exception as e:
+            #         import traceback
+            #         add_event(f"Retry agent error: {e}")
+            #         add_event(f"Retry traceback: {traceback.format_exc()}")
+            #         outputs = {}
+                    
+            # reasoning_text = outputs.get("reasoning", "") if isinstance(outputs, dict) else ""
+            # if reasoning_text:
+            #     add_event(f"LLM reasoning summary: {reasoning_text}")
+            
+            
             
             await asyncio.sleep(get_interval_seconds(args.interval))
                 
