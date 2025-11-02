@@ -26,7 +26,7 @@ def get_interval_seconds(interval_str):
         return int(interval_str[:-1]) * 86400
     else:
         raise ValueError(f"Unsupported interval: {interval_str}")
-
+    
 def main():
     """Entry point for fetching and logging TAAPI indicators for given assets."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -35,10 +35,21 @@ def main():
     parser.add_argument("--interval", type=str, required=True, help="Interval period, e.g., 1h")
     args = parser.parse_args()
 
+    # Lance le bot avec les arguments
+    asyncio.run(run_trading_bot(args.assets, args.interval))
+
+def run_trading_bot(assets, interval):
+    # """Entry point for fetching and logging TAAPI indicators for given assets."""
+    # logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    # parser = argparse.ArgumentParser(description="Fetch TAAPI indicators for assets.")
+    # parser.add_argument("--assets", type=str, nargs="+", required=True, help="Assets to fetch, e.g., BTC ETH")
+    # parser.add_argument("--interval", type=str, required=True, help="Interval period, e.g., 1h")
+    # args = parser.parse_args()
+
     taapi = TAAPIClient()
     hyperliquid = HyperliquidAPI()
     agent = TradingAgent()
-    logging.info(f"Fetching indicators for assets: {args.assets} at interval: {args.interval}")
+    logging.info(f"Fetching indicators for assets: {assets} at interval: {interval}")
 
     start_time = datetime.now(timezone.utc)
     invocation_count = 0
@@ -199,7 +210,7 @@ def main():
             # Gather market data for the asset
             market_sections = []
             asset_prices = {}
-            for asset in args.assets:
+            for asset in assets:
                 try:
                     current_price = await hyperliquid.get_current_price(asset)
                     asset_prices[asset] = current_price
@@ -277,12 +288,12 @@ def main():
                 ("account", dashboard),
                 ("market_data", market_sections),
                 ("instructions", {
-                    "assets": args.assets,
+                    "assets": assets,
                     "requirement": "Decide actions for all assets and return a strict JSON array matching the schema."
                 })
             ])
             context = json.dumps(context_payload, default=json_default)
-            add_event(f"Combined prompt length: {len(context)} chars for {len(args.assets)} assets")
+            add_event(f"Combined prompt length: {len(context)} chars for {len(assets)} assets")
             with open("prompts.log", "a") as f:
                 f.write(f"\n\n--- {datetime.now()} - ALL ASSETS ---\n{json.dumps(context_payload, indent=2, default=json_default)}\n")
                 
@@ -303,45 +314,149 @@ def main():
                 except Exception:
                     return True
                 
+            try:
+                outputs = agent.decide_trade(assets, context)
+                if not isinstance(outputs, dict):
+                    add_event(f"Invalid output format (expected dict): {outputs}")
+                    outputs = {}
+            except Exception as e:
+                import traceback
+                add_event(f"Agent error: {e}")
+                add_event(f"Traceback: {traceback.format_exc()}")
+                outputs = {}
                 
-            # try:
-            #     outputs = agent.decide_trade(args.assets, context)
-            #     if not isinstance(outputs, dict):
-            #         add_event(f"Invalid output format (expected dict): {outputs}")
-            #         outputs = {}
-            # except Exception as e:
-            #     import traceback
-            #     add_event(f"Agent error: {e}")
-            #     add_event(f"Traceback: {traceback.format_exc()}")
-            #     outputs = {}
                 
-                
-            # # Retry once on failure/parse error with a stricter instruction prefix
-            # if _is_failed_outputs(outputs):
-            #     add_event("Retrying LLM once due to invalid/parse-error output")
-            #     context_retry_payload = OrderedDict([
-            #         ("retry_instruction", "Return ONLY the JSON array per schema with no prose."),
-            #         ("original_context", context_payload)
-            #     ])
-            #     context_retry = json.dumps(context_retry_payload, default=json_default)
-            #     try:
-            #         outputs = agent.decide_trade(args.assets, context_retry)
-            #         if not isinstance(outputs, dict):
-            #             add_event(f"Retry invalid format: {outputs}")
-            #             outputs = {}
-            #     except Exception as e:
-            #         import traceback
-            #         add_event(f"Retry agent error: {e}")
-            #         add_event(f"Retry traceback: {traceback.format_exc()}")
-            #         outputs = {}
+            # Retry once on failure/parse error with a stricter instruction prefix
+            if _is_failed_outputs(outputs):
+                add_event("Retrying LLM once due to invalid/parse-error output")
+                context_retry_payload = OrderedDict([
+                    ("retry_instruction", "Return ONLY the JSON array per schema with no prose."),
+                    ("original_context", context_payload)
+                ])
+                context_retry = json.dumps(context_retry_payload, default=json_default)
+                try:
+                    outputs = agent.decide_trade(assets, context_retry)
+                    if not isinstance(outputs, dict):
+                        add_event(f"Retry invalid format: {outputs}")
+                        outputs = {}
+                except Exception as e:
+                    import traceback
+                    add_event(f"Retry agent error: {e}")
+                    add_event(f"Retry traceback: {traceback.format_exc()}")
+                    outputs = {}
                     
-            # reasoning_text = outputs.get("reasoning", "") if isinstance(outputs, dict) else ""
-            # if reasoning_text:
-            #     add_event(f"LLM reasoning summary: {reasoning_text}")
+            reasoning_text = outputs.get("reasoning", "") if isinstance(outputs, dict) else ""
+            if reasoning_text:
+                add_event(f"LLM reasoning summary: {reasoning_text}")
             
+            # Execute trades for each asset
+            for output in outputs.get("trade_decisions", []) if isinstance(outputs, dict) else []:
+                try:
+                    asset = output.get("asset")
+                    if not asset or asset not in assets:
+                        continue
+                    action = output.get("action")
+                    current_price = asset_prices.get(asset, 0)
+                    action = output["action"]
+                    rationale = output.get("rationale", "")
+                    if rationale:
+                        add_event(f"Decision rationale for {asset}: {rationale}")
+                    if action in ("buy", "sell"):
+                        is_buy = action == "buy"
+                        alloc_usd = float(output.get("allocation_usd", 0.0))
+                        if alloc_usd <= 0:
+                            add_event(f"Holding {asset}: zero/negative allocation")
+                            continue
+                        amount = alloc_usd / current_price
+
+                        order = await hyperliquid.place_buy_order(asset, amount) if is_buy else await hyperliquid.place_sell_order(asset, amount)
+                        # Confirm by checking recent fills for this asset shortly after placing
+                        await asyncio.sleep(1)
+                        fills_check = await hyperliquid.get_recent_fills(limit=10)
+                        filled = False
+                        for fc in reversed(fills_check):
+                            try:
+                                if (fc.get('coin') == asset or fc.get('asset') == asset):
+                                    filled = True
+                                    break
+                            except Exception:
+                                continue
+                        trade_log.append({"type": action, "price": current_price, "amount": amount, "exit_plan": output["exit_plan"], "filled": filled})
+                        tp_oid = None
+                        sl_oid = None
+                        if output["tp_price"]:
+                            tp_order = await hyperliquid.place_take_profit(asset, is_buy, amount, output["tp_price"])
+                            tp_oids = hyperliquid.extract_oids(tp_order)
+                            tp_oid = tp_oids[0] if tp_oids else None
+                            add_event(f"TP placed {asset} at {output['tp_price']}")
+                        if output["sl_price"]:
+                            sl_order = await hyperliquid.place_stop_loss(asset, is_buy, amount, output["sl_price"])
+                            sl_oids = hyperliquid.extract_oids(sl_order)
+                            sl_oid = sl_oids[0] if sl_oids else None
+                            add_event(f"SL placed {asset} at {output['sl_price']}")
+                        # Reconcile: if opposite-side position exists or TP/SL just filled, clear stale active_trades for this asset
+                        for existing in active_trades[:]:
+                            if existing.get('asset') == asset:
+                                try:
+                                    active_trades.remove(existing)
+                                except ValueError:
+                                    pass
+                        active_trades.append({
+                            "asset": asset,
+                            "is_long": is_buy,
+                            "amount": amount,
+                            "entry_price": current_price,
+                            "tp_oid": tp_oid,
+                            "sl_oid": sl_oid,
+                            "exit_plan": output["exit_plan"],
+                            "opened_at": datetime.now().isoformat()
+                        })
+                        add_event(f"{action.upper()} {asset} amount {amount:.4f} at ~{current_price}")
+                        if rationale:
+                            add_event(f"Post-trade rationale for {asset}: {rationale}")
+                        # Write to diary after confirming fills status
+                        with open(diary_path, "a") as f:
+                            diary_entry = {
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "asset": asset,
+                                "action": action,
+                                "allocation_usd": alloc_usd,
+                                "amount": amount,
+                                "entry_price": current_price,
+                                "tp_price": output.get("tp_price"),
+                                "tp_oid": tp_oid,
+                                "sl_price": output.get("sl_price"),
+                                "sl_oid": sl_oid,
+                                "exit_plan": output.get("exit_plan", ""),
+                                "rationale": output.get("rationale", ""),
+                                "order_result": str(order),
+                                "opened_at": datetime.now(timezone.utc).isoformat(),
+                                "filled": filled
+                            }
+                            f.write(json.dumps(diary_entry) + "\n")
+                    else:
+                        add_event(f"Hold {asset}: {output.get('rationale', '')}")
+                        # Write hold to diary
+                        with open(diary_path, "a") as f:
+                            diary_entry = {
+                                "timestamp": datetime.now().isoformat(),
+                                "asset": asset,
+                                "action": "hold",
+                                "rationale": output.get("rationale", "")
+                            }
+                            f.write(json.dumps(diary_entry) + "\n")
+                except Exception as e:
+                    import traceback
+                    add_event(f"Execution error {asset}: {e}")
             
-            
-            await asyncio.sleep(get_interval_seconds(args.interval))
+            await asyncio.sleep(get_interval_seconds(interval))
+        
+        
+    def calculate_total_return(state, trade_log):
+        """Compute percent return relative to an assumed initial balance."""
+        initial = 10000
+        current = state['balance'] + sum(p.get('pnl', 0) for p in state.get('positions', []))
+        return ((current - initial) / initial) * 100 if initial else 0
                 
     def calculate_sharpe(returns):
         """Compute a naive Sharpe-like ratio from the trade log."""
@@ -360,6 +475,7 @@ def main():
         await run_loop()
         
     asyncio.run(main_async())
-        
+      
+
 if __name__ == "__main__":
     main()

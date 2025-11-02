@@ -73,11 +73,11 @@ class HyperliquidAPI:
         self.info = Info(self.base_url)
         
         # Si vault_address est fourni, l'agent trade pour ce compte
-        vault_address = CONFIG.get("hyperliquid_vault_address")
-        if vault_address:
-            self.exchange = Exchange(self.wallet, self.base_url, vault_address=vault_address)
-        else:
-            self.exchange = Exchange(self.wallet, self.base_url)
+        # vault_address = CONFIG.get("hyperliquid_vault_address")
+        # if vault_address:
+        #     self.exchange = Exchange(self.wallet, self.base_url, vault_address=vault_address)
+        # else:
+        self.exchange = Exchange(self.wallet, self.base_url)
 
     def _reset_clients(self):
         """Recreate SDK clients after connection failures while logging failures."""
