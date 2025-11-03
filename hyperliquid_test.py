@@ -1,105 +1,3 @@
-# """Script de test pour vérifier la configuration Hyperliquid."""
-# import sys
-# import pathlib
-
-# sys.path.insert(0, str(pathlib.Path(__file__).parent))
-
-# import asyncio
-# import logging
-# from src.config_loader import CONFIG
-# from src.trading.hyperliquid_api import HyperliquidAPI
-
-# logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-# async def test_hyperliquid():
-#     """Test les fonctionnalités de base de l'API Hyperliquid."""
-    
-#     print("\n" + "="*60)
-#     print("TEST HYPERLIQUID API")
-#     print("="*60 + "\n")
-    
-#     # 1. Initialisation
-#     print("1️⃣ Initialisation de l'API...")
-#     try:
-#         api = HyperliquidAPI()
-#         print(f"✅ Agent wallet address: {api.wallet.address}")
-#         print(f"✅ Vault address: {CONFIG.get('hyperliquid_vault_address')}")
-#         print(f"✅ Base URL: {api.base_url}")
-#     except Exception as e:
-#         print(f"❌ Erreur d'initialisation: {e}")
-#         return
-    
-#     # 2. Récupérer l'état du compte
-#     print("\n2️⃣ Récupération de l'état du compte...")
-#     try:
-#         state = await api.get_user_state()
-#         print(f"✅ Balance: ${state['balance']:.2f}")
-#         print(f"✅ Total value: ${state['total_value']:.2f}")
-#         print(f"✅ Positions ouvertes: {len(state['positions'])}")
-        
-#         if state['positions']:
-#             print("\n   Positions:")
-#             for pos in state['positions']:
-#                 print(f"   - {pos.get('coin')}: {pos.get('szi')} (PnL: ${pos.get('pnl', 0):.2f})")
-#     except Exception as e:
-#         print(f"❌ Erreur: {e}")
-#         return
-    
-#     # 3. Récupérer les prix actuels
-#     print("\n3️⃣ Récupération des prix...")
-#     try:
-#         btc_price = await api.get_current_price("BTC")
-#         eth_price = await api.get_current_price("ETH")
-#         print(f"✅ BTC: ${btc_price:,.2f}")
-#         print(f"✅ ETH: ${eth_price:,.2f}")
-#     except Exception as e:
-#         print(f"❌ Erreur: {e}")
-    
-#     # 4. Récupérer les ordres ouverts
-#     print("\n4️⃣ Récupération des ordres ouverts...")
-#     try:
-#         orders = await api.get_open_orders()
-#         print(f"✅ Ordres ouverts: {len(orders)}")
-        
-#         if orders:
-#             print("\n   Ordres:")
-#             for order in orders[:5]:
-#                 print(f"   - {order.get('coin')}: {order.get('side')} {order.get('sz')} @ ${order.get('limitPx')}")
-#     except Exception as e:
-#         print(f"❌ Erreur: {e}")
-    
-#     # 5. Récupérer funding et OI
-#     print("\n5️⃣ Récupération funding & open interest...")
-#     try:
-#         btc_funding = await api.get_funding_rate("BTC")
-#         btc_oi = await api.get_open_interest("BTC")
-#         print(f"✅ BTC Funding: {btc_funding:.6%}")
-#         print(f"✅ BTC Open Interest: ${btc_oi:,.0f}")
-#     except Exception as e:
-#         print(f"❌ Erreur: {e}")
-    
-#     # 6. Test d'ordre
-#     print("\n6️⃣ Test d'ordre...")
-#     try:
-#         # Petit ordre de test: 0.0001 ETH (~$0.38)
-#         result = await api.place_buy_order("ETH", 0.0001, slippage=0.02)
-#         print(f"✅ Ordre passé: {result}")
-        
-#         # Annuler immédiatement
-#         oids = api.extract_oids(result)
-#         if oids:
-#             await api.cancel_order("ETH", oids[0])
-#             print(f"✅ Ordre annulé: {oids[0]}")
-#     except Exception as e:
-#         print(f"❌ Erreur d'ordre: {e}")
-    
-#     print("\n" + "="*60)
-#     print("✅ Tests terminés!")
-#     print("="*60 + "\n")
-
-# if __name__ == "__main__":
-#     asyncio.run(test_hyperliquid())
-
 """Script de test pour vérifier la configuration Hyperliquid."""
 import sys
 import pathlib
@@ -108,6 +6,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
 import asyncio
 import logging
+import json
 from src.config_loader import CONFIG
 from src.trading.hyperliquid_api import HyperliquidAPI
 
@@ -117,31 +16,97 @@ async def test_hyperliquid():
     """Test les fonctionnalités de base de l'API Hyperliquid."""
     
     print("\n" + "="*60)
-    print("TEST HYPERLIQUID API")
+    print("TEST HYPERLIQUID API - GET_USER_STATE")
     print("="*60 + "\n")
     
-    # DEBUG : Affiche TOUTES les adresses
-    print("🔍 DEBUG - Configuration actuelle:")
-    api = HyperliquidAPI()
-    print(f"   Wallet agent utilisé: {api.wallet.address}")
-    print(f"   Vault configuré: {CONFIG.get('hyperliquid_vault_address')}")
-    print(f"\n   Agents autorisés sur Hyperliquid:")
-    print(f"   - 0xcf53de1d22ce94ba285275c61931ffec82a23db6 (agent)")
-    print(f"   - 0x4125992b8d859e1edaad428238ec0fa65ec8e5f1 (app.hyperliquid.xyz)")
-    print("\n")
-    
-    # Test d'ordre
-    print("6️⃣ Test d'ordre...")
+    # Initialisation
+    print("1️⃣ Initialisation de l'API...")
     try:
-        result = await api.place_buy_order("ETH", 0.0027, slippage=0.02)
-        print(f"✅ Ordre passé: {result}")
-        
-        oids = api.extract_oids(result)
-        if oids:
-            await api.cancel_order("ETH", oids[0])
-            print(f"✅ Ordre annulé: {oids[0]}")
+        api = HyperliquidAPI()
+        print(f"✅ Agent wallet address: {api.wallet.address}")
+        print(f"✅ Vault address: {CONFIG.get('hyperliquid_vault_address')}")
+        print(f"✅ Base URL: {api.base_url}")
     except Exception as e:
-        print(f"❌ Erreur d'ordre: {e}")
+        print(f"❌ Erreur d'initialisation: {e}")
+        import traceback
+        traceback.print_exc()
+        return
+    
+    # Récupérer l'état du compte
+    print("\n2️⃣ Récupération de l'état du compte (get_user_state)...")
+    print("="*60)
+    try:
+        state = await api.get_user_state()
+        
+        # Affiche TOUT le state en JSON formaté
+        print("\n📦 CONTENU COMPLET DU STATE:")
+        print(json.dumps(state, indent=2, default=str))
+        
+        print("\n" + "="*60)
+        print("📊 ANALYSE DU STATE:")
+        print("="*60)
+        
+        # Balance
+        print(f"\n💰 Balance: ${state.get('balance', 0):.2f}")
+        print(f"💰 Total value: ${state.get('total_value', 0):.2f}")
+        
+        # Positions
+        positions = state.get('positions', [])
+        print(f"\n📈 Positions ouvertes: {len(positions)}")
+        if positions:
+            print("\n   Détails des positions:")
+            for i, pos in enumerate(positions, 1):
+                print(f"\n   Position {i}:")
+                print(f"   {json.dumps(pos, indent=6, default=str)}")
+        else:
+            print("   Aucune position ouverte")
+        
+        # Ordres
+        orders = state.get('open_orders', [])
+        print(f"\n📋 Ordres ouverts: {len(orders)}")
+        if orders:
+            print("\n   Détails des ordres:")
+            for i, order in enumerate(orders, 1):
+                print(f"\n   Ordre {i}:")
+                print(f"   {json.dumps(order, indent=6, default=str)}")
+        else:
+            print("   Aucun ordre ouvert")
+        
+        # Fills récents
+        fills = state.get('fills', [])
+        print(f"\n📜 Fills récents: {len(fills)}")
+        if fills:
+            print(f"\n   Les 5 derniers fills:")
+            for i, fill in enumerate(fills[:5], 1):
+                print(f"\n   Fill {i}:")
+                print(f"   {json.dumps(fill, indent=6, default=str)}")
+        else:
+            print("   Aucun fill récent")
+        
+        # Autres clés présentes
+        print(f"\n🔑 Toutes les clés présentes dans state:")
+        for key in state.keys():
+            value_type = type(state[key]).__name__
+            if isinstance(state[key], (list, dict)):
+                length = len(state[key])
+                print(f"   - {key}: {value_type} (length: {length})")
+            else:
+                print(f"   - {key}: {value_type} = {state[key]}")
+                
+        print("\n📜 Testing get_trade_history...")
+        trades = await api.get_trade_history(limit=10)
+        
+        print(f"✅ Retrieved {len(trades)} trades")
+        
+        if trades:
+            print("\n📊 Sample trade:")
+            print(json.dumps(trades, indent=2))
+        
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
+        import traceback
+        traceback.print_exc()
+        return
     
     print("\n" + "="*60)
     print("✅ Tests terminés!")

@@ -406,7 +406,82 @@ class HyperliquidAPI:
             logging.error("Funding fetch error for %s: %s", asset, e)
             return None
         
-        
-        
-        
-# python src/main.py --assets BTC ETH --interval 1h      
+
+    async def get_trade_history(self, limit: int = 100):
+        """Retrieve complete trade history (fills) for the wallet.
+
+        Args:
+            limit: Maximum number of fills to return.
+
+        Returns:
+            List of normalized trade dictionaries with keys: id, timestamp, coin,
+            side, size, price, total, fee, closed_pnl, hash, oid, crossed,
+            start_position.
+        """
+        try:
+            user_address = CONFIG.get("hyperliquid_vault_address") or self.wallet.address
+            
+            # Fetch fills using the Info API
+            if hasattr(self.info, 'user_fills'):
+                fills = await self._retry(lambda: self.info.user_fills(user_address))
+            elif hasattr(self.info, 'fills'):
+                fills = await self._retry(lambda: self.info.fills(user_address))
+            else:
+                logging.warning("SDK does not support user_fills or fills endpoint")
+                return []
+            
+            if not isinstance(fills, list):
+                logging.warning("Unexpected fills response type: %s", type(fills))
+                return []
+            
+            # Normalize and limit fills
+            trades = []
+            for fill in fills[:limit]:
+                try:
+                    timestamp_ms = fill.get('time', 0)
+                    coin = fill.get('coin', '')
+                    price = float(fill.get('px', 0))
+                    size = float(fill.get('sz', 0))
+                    
+                    trades.append({
+                        'id': f"{timestamp_ms}_{coin}_{price}",
+                        'timestamp': self._timestamp_to_iso(timestamp_ms),
+                        'coin': coin,
+                        'side': 'BUY' if fill.get('side') == 'B' else 'SELL',
+                        'size': size,
+                        'price': price,
+                        'total': size * price,
+                        'fee': float(fill.get('fee', 0)),
+                        'closed_pnl': float(fill.get('closedPnl', 0)),
+                        'hash': fill.get('hash', ''),
+                        'oid': fill.get('oid', ''),
+                        'crossed': fill.get('crossed', False),
+                        'start_position': float(fill.get('startPosition', 0))
+                    })
+                except (ValueError, KeyError, TypeError) as e:
+                    logging.warning("Skipping malformed fill: %s", e)
+                    continue
+            
+            logging.info("Retrieved %s trade(s)", len(trades))
+            return trades
+            
+        except (RuntimeError, ValueError, KeyError, ConnectionError) as e:
+            logging.error("Get trade history error: %s", e)
+            return []
+
+    def _timestamp_to_iso(self, timestamp_ms):
+        """Convert millisecond timestamp to ISO format string.
+
+        Args:
+            timestamp_ms: Unix timestamp in milliseconds.
+
+        Returns:
+            ISO 8601 formatted datetime string or empty string on error.
+        """
+        try:
+            from datetime import datetime
+            return datetime.fromtimestamp(timestamp_ms / 1000).isoformat()
+        except (ValueError, OSError):
+            return ""
+            
+    # python src/main.py --assets BTC ETH --interval 1h      
