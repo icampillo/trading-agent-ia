@@ -48,7 +48,7 @@ sys.stderr.reconfigure(line_buffering=True)
 def analyze_completed_trades(fills):
     """Analyse les fills pour créer des trades complets (entry → exit).
     
-    Gère les LONG et SHORT, ainsi que les flips de position.
+    Utilise start_position pour tracker correctement LONG et SHORT.
     
     Args:
         fills: Liste des fills bruts de get_trade_history()
@@ -60,7 +60,7 @@ def analyze_completed_trades(fills):
     from datetime import datetime
     
     # Groupe par coin
-    positions = defaultdict(lambda: {'size': 0, 'entry_price': 0, 'entry_time': None, 'side': None})
+    positions_tracker = defaultdict(lambda: {'entry': None, 'fills': []})
     completed_trades = []
     
     for fill in sorted(fills, key=lambda x: x.get('timestamp', '')):
@@ -70,48 +70,95 @@ def analyze_completed_trades(fills):
         price = fill.get('price', 0)
         timestamp = fill.get('timestamp')
         closed_pnl = fill.get('closed_pnl', 0)
+        start_pos = fill.get('start_position', 0)  # Position AVANT ce fill
         
-        current_pos = positions[coin]
-        previous_size = current_pos['size']
+        tracker = positions_tracker[coin]
         
-        # Détermine la nouvelle taille de position
+        # Détermine la position après ce fill
         if side == 'BUY':
-            new_size = previous_size + size
+            end_pos = start_pos + size
         else:  # SELL
-            new_size = previous_size - size
+            end_pos = start_pos - size
         
-        # Détecte si on ferme/réduit une position
-        if (previous_size > 0 and side == 'SELL') or (previous_size < 0 and side == 'BUY'):
-            # On ferme ou réduit une position existante
-            
-            if current_pos['entry_time']:
-                entry_time = datetime.fromisoformat(current_pos['entry_time'])
+        # Cas 1: Ouvre une nouvelle position
+        if start_pos == 0 and end_pos != 0:
+            tracker['entry'] = {
+                'timestamp': timestamp,
+                'price': price,
+                'side': 'LONG' if end_pos > 0 else 'SHORT',
+                'size': abs(end_pos)
+            }
+            tracker['fills'] = [fill]
+        
+        # Cas 2: Ferme complètement une position
+        elif start_pos != 0 and end_pos == 0:
+            if tracker['entry']:
+                entry = tracker['entry']
+                entry_time = datetime.fromisoformat(entry['timestamp'])
                 exit_time = datetime.fromisoformat(timestamp)
                 holding_time = exit_time - entry_time
                 
                 hours = int(holding_time.total_seconds() // 3600)
                 minutes = int((holding_time.total_seconds() % 3600) // 60)
                 
-                # Calcule le P&L
-                if previous_size > 0:  # Fermeture LONG
-                    pnl = (price - current_pos['entry_price']) * min(size, abs(previous_size))
-                    trade_side = 'LONG'
-                else:  # Fermeture SHORT
-                    pnl = (current_pos['entry_price'] - price) * min(size, abs(previous_size))
-                    trade_side = 'SHORT'
-                
-                trade_size = min(size, abs(previous_size))
+                # Calcule P&L selon le côté
+                if entry['side'] == 'LONG':
+                    pnl = (price - entry['price']) * abs(start_pos)
+                else:  # SHORT
+                    pnl = (entry['price'] - price) * abs(start_pos)
                 
                 completed_trades.append({
                     'coin': coin,
-                    'side': trade_side,
-                    'entry_time': current_pos['entry_time'],
-                    'entry_price': current_pos['entry_price'],
+                    'side': entry['side'],
+                    'entry_time': entry['timestamp'],
+                    'entry_price': entry['price'],
                     'exit_time': timestamp,
                     'exit_price': price,
-                    'size': trade_size,
-                    'notional_entry': trade_size * current_pos['entry_price'],
-                    'notional_exit': trade_size * price,
+                    'size': abs(start_pos),
+                    'notional_entry': abs(start_pos) * entry['price'],
+                    'notional_exit': abs(start_pos) * price,
+                    'holding_hours': hours,
+                    'holding_minutes': minutes,
+                    'pnl': pnl,
+                    'closed_pnl': closed_pnl,
+                    'status': 'completed'
+                })
+                
+                # Reset tracker
+                tracker['entry'] = None
+                tracker['fills'] = []
+        
+        # Cas 3: Réduit une position (fermeture partielle)
+        elif (start_pos > 0 and end_pos > 0 and end_pos < start_pos) or \
+             (start_pos < 0 and end_pos < 0 and abs(end_pos) < abs(start_pos)):
+            if tracker['entry']:
+                entry = tracker['entry']
+                entry_time = datetime.fromisoformat(entry['timestamp'])
+                exit_time = datetime.fromisoformat(timestamp)
+                holding_time = exit_time - entry_time
+                
+                hours = int(holding_time.total_seconds() // 3600)
+                minutes = int((holding_time.total_seconds() % 3600) // 60)
+                
+                # Taille fermée
+                closed_size = abs(start_pos - end_pos)
+                
+                # P&L
+                if entry['side'] == 'LONG':
+                    pnl = (price - entry['price']) * closed_size
+                else:  # SHORT
+                    pnl = (entry['price'] - price) * closed_size
+                
+                completed_trades.append({
+                    'coin': coin,
+                    'side': entry['side'],
+                    'entry_time': entry['timestamp'],
+                    'entry_price': entry['price'],
+                    'exit_time': timestamp,
+                    'exit_price': price,
+                    'size': closed_size,
+                    'notional_entry': closed_size * entry['price'],
+                    'notional_exit': closed_size * price,
                     'holding_hours': hours,
                     'holding_minutes': minutes,
                     'pnl': pnl,
@@ -119,18 +166,48 @@ def analyze_completed_trades(fills):
                     'status': 'completed'
                 })
         
-        # Met à jour la position
-        if abs(new_size) < 0.00001:  # Position fermée
-            positions[coin] = {'size': 0, 'entry_price': 0, 'entry_time': None, 'side': None}
-        elif (new_size > 0 and previous_size <= 0) or (new_size < 0 and previous_size >= 0):
-            # Nouvelle position ou flip
-            positions[coin] = {
-                'size': new_size,
-                'entry_price': price,
-                'entry_time': timestamp,
-                'side': 'LONG' if new_size > 0 else 'SHORT'
-            }
-        # Sinon, on garde la position actuelle (ajout à une position existante)
+        # Cas 4: Flip de position (LONG → SHORT ou SHORT → LONG)
+        elif (start_pos > 0 and end_pos < 0) or (start_pos < 0 and end_pos > 0):
+            if tracker['entry']:
+                entry = tracker['entry']
+                entry_time = datetime.fromisoformat(entry['timestamp'])
+                exit_time = datetime.fromisoformat(timestamp)
+                holding_time = exit_time - entry_time
+                
+                hours = int(holding_time.total_seconds() // 3600)
+                minutes = int((holding_time.total_seconds() % 3600) // 60)
+                
+                # P&L sur la position fermée
+                if entry['side'] == 'LONG':
+                    pnl = (price - entry['price']) * abs(start_pos)
+                else:  # SHORT
+                    pnl = (entry['price'] - price) * abs(start_pos)
+                
+                completed_trades.append({
+                    'coin': coin,
+                    'side': entry['side'],
+                    'entry_time': entry['timestamp'],
+                    'entry_price': entry['price'],
+                    'exit_time': timestamp,
+                    'exit_price': price,
+                    'size': abs(start_pos),
+                    'notional_entry': abs(start_pos) * entry['price'],
+                    'notional_exit': abs(start_pos) * price,
+                    'holding_hours': hours,
+                    'holding_minutes': minutes,
+                    'pnl': pnl,
+                    'closed_pnl': closed_pnl,
+                    'status': 'completed'
+                })
+                
+                # Nouvelle position dans le sens opposé
+                tracker['entry'] = {
+                    'timestamp': timestamp,
+                    'price': price,
+                    'side': 'LONG' if end_pos > 0 else 'SHORT',
+                    'size': abs(end_pos)
+                }
+                tracker['fills'] = [fill]
     
     # Tri par date décroissante
     completed_trades.sort(key=lambda x: x['exit_time'], reverse=True)
