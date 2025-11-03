@@ -282,6 +282,12 @@ def get_completed_trades():  # ✅ Fonction synchrone
         
         completed = analyze_completed_trades(fills)
         
+        cutoff_date = datetime(2025, 11, 1, 0, 0, 0)
+        completed = [
+            t for t in completed 
+            if datetime.fromisoformat(t['exit_time']) >= cutoff_date
+        ]
+        
         # Stats
         total_pnl = sum(t['pnl'] for t in completed)
         winning_trades = len([t for t in completed if t['pnl'] > 0])
