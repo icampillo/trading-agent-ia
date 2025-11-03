@@ -269,11 +269,16 @@ def get_portfolio():
     return jsonify(data if data else {})
 
 @app.route('/api/trades/completed')
-async def get_completed_trades():
+def get_completed_trades():  # ✅ Fonction synchrone
     """API endpoint pour les trades complétés avec P&L."""
     try:
+        # Crée un event loop comme pour les autres routes
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Récupère les fills
         api = HyperliquidAPI()
-        fills = await api.get_trade_history(limit=200)
+        fills = loop.run_until_complete(api.get_trade_history(limit=200))
         
         completed = analyze_completed_trades(fills)
         
@@ -294,6 +299,8 @@ async def get_completed_trades():
         })
     except Exception as e:
         logging.error(f"Error in get_completed_trades: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @socketio.on('connect')
