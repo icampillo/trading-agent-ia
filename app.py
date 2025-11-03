@@ -354,7 +354,7 @@ def update_portfolio():
             # ✅ APRÈS: utilise namespace='/'
             socketio.emit('portfolio_update', data, namespace='/')
         
-        socketio.sleep(10) 
+        socketio.sleep(30) 
 
 @app.route('/')
 def index():
