@@ -196,7 +196,7 @@ def run_trading_bot(assets, interval):
 
 
             dashboard = {
-                "total_return_pct": round(total_return_pct, 2),
+                "total_return_pct": round(total_return_pct, 2),  # ✅ Déjà présent
                 "balance": round_or_none(state['balance'], 2),
                 "account_value": round_or_none(account_value, 2),
                 "sharpe_ratio": round_or_none(sharpe, 3),
@@ -217,6 +217,7 @@ def run_trading_bot(assets, interval):
                 "open_orders": open_orders_struct,
                 "recent_diary": recent_diary,
                 "recent_fills": recent_fills_struct,
+                "total_pnl": round(unrealized_pnl, 2),  # ✅ AJOUTE CETTE LIGNE
             }
             logging.info(f"Dashboard: {dashboard}")
 
