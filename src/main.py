@@ -78,7 +78,18 @@ def run_trading_bot(assets, interval):
             # Global account state
             state = await hyperliquid.get_user_state()
             add_event(f"Account state: {state}")
-            total_value = state.get('total_value') or state['balance'] + sum(p.get('pnl', 0) for p in state['positions'])
+
+            # ✅ Calcule le vrai total value (sans leverage)
+            balance = float(state.get('balance', 0))
+            unrealized_pnl = sum(float(p.get('pnl', 0)) for p in state.get('positions', []))
+
+            # Total = Balance + PnL non réalisé (la marge utilisée est déjà déduite de la balance)
+            total_value = balance + unrealized_pnl
+
+            # Log détaillé pour debug
+            add_event(f"💰 Portfolio: Balance=${balance:.2f}, Unrealized P&L=${unrealized_pnl:.2f}, Total Value=${total_value:.2f}")
+            add_event(f"📊 Positions: {len(state.get('positions', []))} open")
+
             sharpe = calculate_sharpe(trade_log)
             
             account_value = total_value
