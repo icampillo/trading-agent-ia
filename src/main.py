@@ -57,7 +57,7 @@ def run_trading_bot(assets, interval):
     active_trades = []  # {'asset','is_long','amount','entry_price','tp_oid','sl_oid','exit_plan'}
     recent_events = deque(maxlen=200)
     diary_path = "diary.jsonl"
-    initial_account_value = 100
+    INITIAL_CAPITAL = 100.0 
     # Perp mid-price history sampled each loop (authoritative, avoids spot/perp basis mismatch)
     price_history = {}
 
@@ -91,11 +91,13 @@ def run_trading_bot(assets, interval):
             add_event(f"📊 Positions: {len(state.get('positions', []))} open")
 
             sharpe = calculate_sharpe(trade_log)
-            
+
+            # ✅ Calcule le % de rendement par rapport au capital initial
             account_value = total_value
-            if initial_account_value is None:
-                initial_account_value = account_value
-            total_return_pct = ((account_value - initial_account_value) / initial_account_value * 100.0) if initial_account_value else 0.0
+            total_return_pct = ((account_value - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100.0)
+
+            # Log pour debug
+            add_event(f"📈 Performance: Initial=${INITIAL_CAPITAL:.2f}, Current=${account_value:.2f}, Return={total_return_pct:+.2f}%")
 
             positions = []
             for pos_wrap in state['positions']:
