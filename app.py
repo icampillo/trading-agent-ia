@@ -228,6 +228,8 @@ async def fetch_portfolio_data():
         # Get recent fills
         fills = await api.get_recent_fills(limit=50)
         
+        INITIAL_CAPITAL = 100.0
+        
         # Get current prices for positions
         positions_enriched = []
         total_pnl = 0
@@ -248,11 +250,16 @@ async def fetch_portfolio_data():
                 'side': 'LONG' if float(pos.get('szi', 0)) > 0 else 'SHORT'
             })
         
+        # ✅ AJOUTE : Calcule le total_value et total_return_pct
+        balance = float(state.get('balance', 0))
+        total_value = balance + total_pnl
+        total_return_pct = ((total_value - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100.0)
+        
         # Add to portfolio history
         timestamp = datetime.now()
         portfolio_history.append({
             'timestamp': timestamp.isoformat(),
-            'value': state['total_value'],
+            'value': total_value,
             'pnl': total_pnl
         })
         
@@ -319,8 +326,9 @@ async def fetch_portfolio_data():
         
         return {
             'balance': state['balance'],
-            'total_value': state['total_value'],
+            'total_value': total_value,
             'total_pnl': total_pnl,
+            'total_return_pct': total_return_pct,
             'positions': positions_enriched,
             'open_orders': [{
                 'coin': o.get('coin'),
