@@ -67,7 +67,7 @@ def run_trading_bot(assets, interval):
         
     async def run_loop():
         """Main trading loop that gathers data, calls the agent, and executes trades."""
-        nonlocal invocation_count, initial_account_value
+        nonlocal invocation_count
         while True:
             # Gather data for ALL assets first
             market_sections = []
