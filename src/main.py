@@ -57,7 +57,7 @@ def run_trading_bot(assets, interval):
     active_trades = []  # {'asset','is_long','amount','entry_price','tp_oid','sl_oid','exit_plan'}
     recent_events = deque(maxlen=200)
     diary_path = "diary.jsonl"
-    initial_account_value = None
+    initial_account_value = 100
     # Perp mid-price history sampled each loop (authoritative, avoids spot/perp basis mismatch)
     price_history = {}
 
