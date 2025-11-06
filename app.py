@@ -325,9 +325,10 @@ async def fetch_portfolio_data():
         
         return {
             'balance': state['balance'],
-            'total_value': state['total_balance'],
+            'total_value': state['total_balance'],  # ✅ Utilise total_balance
+            'total_balance': state['total_balance'],  # ✅ Ajoute aussi ce champ pour clarté
             'total_pnl': total_pnl,
-            'total_return_pct': total_return_pct,
+            'total_return_pct': round(total_return_pct, 2),  # ✅ Arrondi
             'positions': positions_enriched,
             'open_orders': [{
                 'coin': o.get('coin'),
