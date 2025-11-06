@@ -634,6 +634,11 @@
             pnlChangeEl.textContent = `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`;
             pnlChangeEl.className = `metric-change ${pnlPct >= 0 ? 'positive' : 'negative'}`;
 
+            const valueChangeEl = document.getElementById('valueChange');
+            const returnPct = data.total_return_pct || 0;  // Récupère depuis l'API
+            valueChangeEl.textContent = `${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%`;
+            valueChangeEl.className = `metric-change ${returnPct >= 0 ? 'positive' : 'negative'}`;
+
             document.getElementById('lastUpdate').textContent = `Last update: ${new Date(data.last_update).toLocaleTimeString()}`;
 
             // Update chart
