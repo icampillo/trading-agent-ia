@@ -252,7 +252,7 @@ async def fetch_portfolio_data():
         
         balance = float(state.get('balance', 0))
         total_value = balance + total_pnl
-        total_return_pct = ((total_value - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100.0)
+        total_return_pct = ((state['total_balance'] - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100.0)
         
         # Add to portfolio history
         timestamp = datetime.now()
