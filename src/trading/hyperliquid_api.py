@@ -317,7 +317,9 @@ class HyperliquidAPI:
         user_address = CONFIG.get("hyperliquid_vault_address") or self.wallet.address
         state = await self._retry(lambda: self.info.user_state(user_address))
         
-        # state = await self._retry(lambda: self.info.user_state(self.wallet.address))
+        margin_summary = state.get("marginSummary", {})
+        account_value = float(margin_summary.get("accountValue", 0))
+        
         positions = state.get("assetPositions", [])
         total_value = float(state.get("accountValue", 0.0))
         enriched_positions = []
@@ -334,7 +336,7 @@ class HyperliquidAPI:
         balance = float(state.get("withdrawable", 0.0))
         if not total_value:
             total_value = balance + sum(max(p.get("pnl", 0.0), 0.0) for p in enriched_positions)
-        return {"balance": balance, "total_value": total_value, "positions": enriched_positions}
+        return {"total_balance": account_value, "balance": balance, "total_value": total_value, "positions": enriched_positions}
 
     async def get_current_price(self, asset):
         """Return the latest mid-price for ``asset``.

@@ -24,7 +24,7 @@ from src.main import run_trading_bot
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', allow_unsafe_werkzeug=True)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', allow_unsafe_werkzeug=True, max_http_buffer_size=10000000)
 
 # Global state
 portfolio_history = []  # Liste des valeurs historiques du portefeuille
@@ -250,7 +250,6 @@ async def fetch_portfolio_data():
                 'side': 'LONG' if float(pos.get('szi', 0)) > 0 else 'SHORT'
             })
         
-        # ✅ AJOUTE : Calcule le total_value et total_return_pct
         balance = float(state.get('balance', 0))
         total_value = balance + total_pnl
         total_return_pct = ((total_value - INITIAL_CAPITAL) / INITIAL_CAPITAL * 100.0)
@@ -326,7 +325,7 @@ async def fetch_portfolio_data():
         
         return {
             'balance': state['balance'],
-            'total_value': total_value,
+            'total_value': state['total_balance'],
             'total_pnl': total_pnl,
             'total_return_pct': total_return_pct,
             'positions': positions_enriched,
@@ -378,7 +377,7 @@ def get_portfolio():
     return jsonify(data if data else {})
 
 @app.route('/api/trades/completed')
-def get_completed_trades():  # ✅ Fonction synchrone
+def get_completed_trades(): 
     """API endpoint pour les trades complétés avec P&L."""
     try:
         # Crée un event loop comme pour les autres routes

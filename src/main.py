@@ -468,7 +468,7 @@ def run_trading_bot(assets, interval):
         
     def calculate_total_return(state, trade_log):
         """Compute percent return relative to an assumed initial balance."""
-        initial = 10000
+        initial = 100.0
         current = state['balance'] + sum(p.get('pnl', 0) for p in state.get('positions', []))
         return ((current - initial) / initial) * 100 if initial else 0
                 
