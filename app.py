@@ -258,7 +258,7 @@ async def fetch_portfolio_data():
         timestamp = datetime.now()
         portfolio_history.append({
             'timestamp': timestamp.isoformat(),
-            'value': total_value,
+            'value': state['total_balance'],
             'pnl': total_pnl
         })
         
