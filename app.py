@@ -29,7 +29,7 @@ app = Flask(__name__)
 # CORS pour Next.js (ajuste selon ton domaine)
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "https://ton-domaine.com"],
+        "origins": ["http://localhost:3000", "https://mini-app-trading-bot.vercel.app"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type"]
     }
